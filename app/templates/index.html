@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة الطلاب الشامل</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- مكتبة توليد الباركود والـ QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- مكتبة التقاط العناصر كصورة (html2canvas) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- مكتبة تعديل وقص وتدوير الصور Cropper.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    <style>
+        /* تنسيقات خاصة بالطباعة لإخفاء الأزرار وإظهار الجدول بنقاء تامة */
+        @media print {
+            button, input, form, .no-print {
+                display: none !important;
+            }
+            body {
+                background-color: white !important;
+                color: black !important;
+            }
+            .max-w-5xl {
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+            }
+            th, td {
+                border: 1px solid #cbd5e1 !important;
+                padding: 8px !important;
+                text-align: right !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 p-6 min-h-screen transition-colors duration-300">
+    <div class="max-w-5xl mx-auto space-y-6">
+        
+        <!-- الهيدر -->
+        <div class="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md gap-4 transition-colors no-print">
+            <h1 class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">🎓 نظام إدارة الطلاب الشامل</h1>
+            <div class="flex items-center gap-4">
+                <div id="serverStatus" class="flex items-center gap-2 bg-slate-100 dark:bg-slate-700/50 px-3 py-1.5 rounded-full text-xs font-medium border border-slate-200 dark:border-slate-700 transition">
+                    <span class="relative flex h-2.5 w-2.5">
+                      <span id="statusPing" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span id="statusDot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span id="statusText">متصل بالسيرفر</span>
+                </div>
+                <button onclick="toggleDarkMode()" class="bg-slate-200 dark:bg-slate-700 p-2.5 rounded-lg text-sm font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition">
+                    🌙 / ☀️
+                </button>
+            </div>
+        </div>
+
+        <!-- الإحصائيات -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 no-print">
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md flex items-center justify-between transition-colors">
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">إجمالي عدد الطلاب</p>
+                    <h3 id="totalStudentsCount" class="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">0</h3>
+                </div>
+                <div class="p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl text-indigo-600 dark:text-indigo-400 text-2xl">👥</div>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-md flex items-center justify-between transition-colors">
+                <div>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">عدد التخصصات النشطة</p>
+                    <h3 id="totalMajorsCount" class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">0</h3>
+                </div>
+                <div class="p-3 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl text-emerald-600 dark:text-emerald-400 text-2xl">📚</div>
+            </div>
+        </div>
+        
+        <!-- نموذج الإضافة -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md space-y-4 transition-colors no-print">
+            <h2 class="text-xl font-semibold border-b border-slate-200 dark:border-slate-700 pb-2 text-indigo-600 dark:text-indigo-400">إضافة طالب جديد</h2>
+            <form id="addStudentForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">كود الطالب</label>
+                    <input type="text" id="student_code" required class="w-full border dark:border-slate-700 bg-transparent rounded p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">الاسم الأول</label>
+                    <input type="text" id="first_name" required class="w-full border dark:border-slate-700 bg-transparent rounded p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">اسم العائلة</label>
+                    <input type="text" id="last_name" required class="w-full border dark:border-slate-700 bg-transparent rounded p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">البريد الإلكتروني</label>
+                    <input type="email" id="email" required class="w-full border dark:border-slate-700 bg-transparent rounded p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">التخصص</label>
+                    <input type="text" id="major" required class="w-full border dark:border-slate-700 bg-transparent rounded p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">الجنس</label>
+                    <select id="gender" required class="w-full border dark:border-slate-700 bg-transparent rounded p-2 focus:ring-2 focus:ring-indigo-500 outline-none">
+                        <option value="ذكر" class="dark:bg-slate-800">ذكر</option>
+                        <option value="أنثى" class="dark:bg-slate-800">أنثى</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-medium mb-1">الصورة الشخصية (اختياري)</label>
+                    <input type="file" id="profile_image_input" accept="image/*" class="w-full border dark:border-slate-700 bg-transparent rounded p-1.5 text-sm file:mr-4 file:py-1 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-900/40 dark:file:text-indigo-300">
+                </div>
+                <!-- معاينة مصغرة للصورة المعدلة -->
+                <div id="imagePreviewContainer" class="md:col-span-2 hidden flex items-center gap-4 bg-slate-50 dark:bg-slate-700/30 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <img id="croppedPreviewImg" class="w-16 h-16 rounded-full object-cover border-2 border-indigo-500 shadow">
+                    <div>
+                        <p class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ تم قص وتعديل الصورة بنجاح</p>
+                        <button type="button" id="reeditImageBtn" class="text-xs text-indigo-500 hover:underline mt-1">تعديل الصورة مرة أخرى</button>
+                    </div>
+                </div>
+
+                <div class="md:col-span-2 mt-2">
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg transition">حفظ وإضافة الطالب</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- جدول الطلاب وأزرار التقارير والتصدير -->
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md transition-colors">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                <h2 class="text-xl font-semibold text-indigo-600 dark:text-indigo-400">قائمة الطلاب المسجلين</h2>
+                
+                <!-- أزرار الطباعة والتصدير والبحث -->
+                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                    <button onclick="printReport()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition shadow flex items-center gap-1 no-print">
+                        🖨️ طباعة التقرير
+                    </button>
+                    <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition shadow flex items-center gap-1 no-print">
+                        📊 تصدير Excel
+                    </button>
+                    <input type="text" id="searchInput" placeholder="بحث..." oninput="fetchStudents()" class="border dark:border-slate-700 bg-transparent rounded p-2 text-sm w-full md:w-60 outline-none no-print">
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-right border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-slate-700/50 border-b dark:border-slate-700">
+                            <th class="p-3">الصورة</th>
+                            <th class="p-3">الكود</th>
+                            <th class="p-3">الاسم</th>
+                            <th class="p-3">البريد</th>
+                            <th class="p-3">التخصص</th>
+                            <th class="p-3">الجنس</th>
+                            <th class="p-3 text-center no-print">إجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="studentsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let croppedBlob = null;
+
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+
+        // دالة طباعة التقرير
+        function printReport() {
+            window.print();
+        }
+
+        // دالة تصدير البيانات لملف إكسل
+        function exportToExcel() {
+            window.location.href = '/students/export/csv';
+        }
+
+        document.getElementById('profile_image_input').addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    openCropperModal(event.target.result);
+                };
+                reader.readAsDataURL(files[0]);
+            }
+        });
+
+        function openCropperModal(imageSrc) {
+            Swal.fire({
+                title: 'تعديل وتوجيه الصورة الشخصية',
+                html: `
+                    <div class="space-y-4">
+                        <div class="max-h-[350px] overflow-hidden flex justify-center bg-slate-900 rounded-lg">
+                            <img id="cropperImage" src="${imageSrc}" class="max-w-full max-h-[320px]">
+                        </div>
+                        <div class="flex justify-center gap-2 flex-wrap">
+                            <button type="button" id="zoomInBtn" class="bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-300">🔍 تقريب (+)</button>
+                            <button type="button" id="zoomOutBtn" class="bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-300">🔍 تبعاد (-)</button>
+                            <button type="button" id="rotateLeftBtn" class="bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-300">↺ تدوير يساراً</button>
+                            <button type="button" id="rotateRightBtn" class="bg-slate-200 dark:bg-slate-700 px-3 py-1.5 rounded text-xs font-semibold hover:bg-slate-300">↻ تدوير يميناً</button>
+                        </div>
+                    </div>
+                `,
+                width: 600,
+                showCancelButton: true,
+                confirmButtonText: 'قص وتثبيت الصورة',
+                cancelButtonText: 'إلغاء',
+                didOpen: () => {
+                    const image = document.getElementById('cropperImage');
+                    window.cropperInstance = new Cropper(image, {
+                        aspectRatio: 1,
+                        viewMode: 1,
+                        autoCropArea: 0.8,
+                        responsive: true,
+                    });
+
+                    document.getElementById('zoomInBtn').onclick = () => window.cropperInstance.zoom(0.1);
+                    document.getElementById('zoomOutBtn').onclick = () => window.cropperInstance.zoom(-0.1);
+                    document.getElementById('rotateLeftBtn').onclick = () => window.cropperInstance.rotate(-90);
+                    document.getElementById('rotateRightBtn').onclick = () => window.cropperInstance.rotate(90);
+                },
+                preConfirm: () => {
+                    return new Promise((resolve) => {
+                        window.cropperInstance.getCroppedCanvas({ width: 300, height: 300 }).toBlob((blob) => {
+                            resolve(blob);
+                        }, 'image/jpeg');
+                    });
+                }
+            }).then((result) => {
+                if (result.isConfirmed && result.value) {
+                    croppedBlob = result.value;
+                    const previewUrl = URL.createObjectURL(croppedBlob);
+                    document.getElementById('croppedPreviewImg').src = previewUrl;
+                    document.getElementById('imagePreviewContainer').classList.remove('hidden');
+                } else {
+                    document.getElementById('profile_image_input').value = '';
+                }
+            });
+        }
+
+        async function fetchStudents() {
+            try {
+                const search = document.getElementById('searchInput').value;
+                const res = await fetch(`/students/${search ? '?search=' + encodeURIComponent(search) : ''}`);
+                const data = await res.json();
+                
+                document.getElementById('totalStudentsCount').innerText = data.length;
+                const uniqueMajors = new Set(data.map(s => s.major));
+                document.getElementById('totalMajorsCount').innerText = uniqueMajors.size;
+
+                const tbody = document.getElementById('studentsTableBody');
+                tbody.innerHTML = '';
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-slate-400">لا توجد بيانات مطابقة</td></tr>`;
+                    return;
+                }
+
+                data.forEach(s => {
+                    const genderVal = s.gender || 'ذكر';
+                    const imgHtml = s.profile_image 
+                        ? `<img src="${s.profile_image}" class="w-10 h-10 rounded-full object-cover border dark:border-slate-600">`
+                        : `<div class="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold">👤</div>`;
+
+                    tbody.innerHTML += `
+                        <tr class="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                            <td class="p-3">${imgHtml}</td>
+                            <td class="p-3 font-mono text-sm">${s.student_code}</td>
+                            <td class="p-3 font-medium">${s.first_name} ${s.last_name}</td>
+                            <td class="p-3 text-slate-600 dark:text-slate-300">${s.email}</td>
+                            <td class="p-3"><span class="bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 px-2.5 py-1 rounded-md text-xs font-semibold">${s.major}</span></td>
+                            <td class="p-3">${genderVal}</td>
+                            <td class="p-3 text-center space-x-1 space-x-reverse no-print">
+                                <button onclick='showProfile(${JSON.stringify(s)})' class="bg-indigo-500 hover:bg-indigo-600 text-white px-2.5 py-1 rounded text-xs font-medium transition">الملف والباركود</button>
+                                <button onclick="openEditModal(${s.id}, '${s.student_code}', '${s.first_name}', '${s.last_name}', '${s.email}', '${s.major}', '${genderVal}')" class="bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded text-xs font-medium transition">تعديل</button>
+                                <button onclick="deleteStudent(${s.id})" class="bg-red-500 hover:bg-red-600 text-white px-2.5 py-1 rounded text-xs font-medium transition">حذف</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (err) {}
+        }
+
+        async function showProfile(s) {
+            const genderVal = s.gender || 'ذكر';
+            const imgTag = s.profile_image 
+                ? `<img src="${s.profile_image}" class="w-24 h-24 rounded-full object-cover border-4 border-indigo-500 mx-auto shadow-md">`
+                : `<div class="w-24 h-24 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-4xl mx-auto shadow-md">🎓</div>`;
+
+            await Swal.fire({
+                title: 'الملف التعريفي للطالب',
+                html: `
+                    <div class="space-y-4 text-right">
+                        <div class="text-center">${imgTag}</div>
+                        <div class="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl space-y-2 text-sm border dark:border-slate-700">
+                            <p><strong>كود الطالب:</strong> <span class="font-mono">${s.student_code}</span></p>
+                            <p><strong>الاسم الكامل:</strong> ${s.first_name} ${s.last_name}</p>
+                            <p><strong>البريد الإلكتروني:</strong> ${s.email}</p>
+                            <p><strong>التخصص:</strong> ${s.major}</p>
+                            <p><strong>الجنس:</strong> ${genderVal}</p>
+                        </div>
+                        <div class="flex flex-col items-center justify-center pt-2 space-y-2">
+                            <div class="flex items-center justify-between w-full px-2">
+                                <span class="text-xs font-medium text-slate-500">باركود تعريف الطالب:</span>
+                                <button id="downloadQrBtn" title="تحميل البطاقة مع الباركود" class="bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/40 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-300 p-1.5 rounded-full shadow-sm transition flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div id="qrCardBox" class="p-4 bg-white rounded-xl shadow border border-slate-200 inline-block text-center space-y-2">
+                                <div id="qrcode" class="flex justify-center"></div>
+                                <p class="text-xs font-bold text-slate-700">${s.first_name} ${s.last_name}</p>
+                            </div>
+                        </div>
+                    </div>
+                `,
+                confirmButtonText: 'إغلاق',
+                didOpen: () => {
+                    const qrContainer = document.getElementById("qrcode");
+                    qrContainer.innerHTML = ""; 
+                    
+                    new QRCode(qrContainer, {
+                        text: `ID: ${s.student_code} | Name: ${s.first_name} ${s.last_name} | Major: ${s.major} | Gender: ${genderVal}`,
+                        width: 130,
+                        height: 130
+                    });
+
+                    document.getElementById("downloadQrBtn").onclick = async () => {
+                        const cardBox = document.getElementById("qrCardBox");
+                        try {
+                            const canvas = await html2canvas(cardBox, { scale: 2, backgroundColor: '#ffffff' });
+                            const imageUrl = canvas.toDataURL("image/png");
+                            
+                            const link = document.createElement('a');
+                            link.href = imageUrl;
+                            link.download = `QRCode_Card_${s.student_code}.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                        } catch (err) {}
+                    };
+                }
+            });
+        }
+
+        document.getElementById('addStudentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('student_code', document.getElementById('student_code').value);
+            formData.append('first_name', document.getElementById('first_name').value);
+            formData.append('last_name', document.getElementById('last_name').value);
+            formData.append('email', document.getElementById('email').value);
+            formData.append('major', document.getElementById('major').value);
+            formData.append('gender', document.getElementById('gender').value);
+            
+            if (croppedBlob) {
+                formData.append('file', croppedBlob, 'profile.jpg');
+            }
+
+            try {
+                const res = await fetch('/students/', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (res.ok) {
+                    Swal.fire({ icon: 'success', title: 'تمت الإضافة بنجاح', timer: 2000, showConfirmButton: false });
+                    document.getElementById('addStudentForm').reset();
+                    document.getElementById('imagePreviewContainer').classList.add('hidden');
+                    croppedBlob = null;
+                    fetchStudents();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'خطأ', text: data.detail || 'تعذر الإضافة' });
+                }
+            } catch (err) {
+                Swal.fire({ icon: 'error', title: 'خطأ', text: 'حدث خطأ في الاتصال' });
+            }
+        });
+
+        async function openEditModal(id, code, fname, lname, email, major, gender) {
+            const { value: formValues } = await Swal.fire({
+                title: 'تعديل بيانات الطالب',
+                html: `
+                    <input id="swal_code" class="swal2-input" placeholder="كود الطالب" value="${code}">
+                    <input id="swal_fname" class="swal2-input" placeholder="الاسم الأول" value="${fname}">
+                    <input id="swal_lname" class="swal2-input" placeholder="اسم العائلة" value="${lname}">
+                    <input id="swal_email" class="swal2-input" placeholder="البريد الإلكتروني" value="${email}">
+                    <input id="swal_major" class="swal2-input" placeholder="التخصص" value="${major}">
+                    <select id="swal_gender" class="swal2-input">
+                        <option value="ذكر" ${gender === 'ذكر' ? 'selected' : ''}>ذكر</option>
+                        <option value="أنثى" ${gender === 'أنثى' ? 'selected' : ''}>أنثى</option>
+                    </select>
+                    <input type="file" id="swal_file" class="swal2-file mt-3" accept="image/*">
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'حفظ التعديلات',
+                cancelButtonText: 'إلغاء',
+                preConfirm: () => {
+                    const formData = new FormData();
+                    formData.append('student_code', document.getElementById('swal_code').value);
+                    formData.append('first_name', document.getElementById('swal_fname').value);
+                    formData.append('last_name', document.getElementById('swal_lname').value);
+                    formData.append('email', document.getElementById('swal_email').value);
+                    formData.append('major', document.getElementById('swal_major').value);
+                    formData.append('gender', document.getElementById('swal_gender').value);
+                    const file = document.getElementById('swal_file').files[0];
+                    if (file) formData.append('file', file);
+                    return formData;
+                }
+            });
+
+            if (formValues) {
+                const res = await fetch(`/students/${id}`, { method: 'PUT', body: formValues });
+                if (res.ok) {
+                    Swal.fire({ icon: 'success', title: 'تم التعديل بنجاح', timer: 1500, showConfirmButton: false });
+                    fetchStudents();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'فشل التعديل' });
+                }
+            }
+        }
+
+        async function deleteStudent(id) {
+            const result = await Swal.fire({
+                title: 'هل أنت متأكد؟',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                confirmButtonText: 'نعم، احذف',
+                cancelButtonText: 'إلغاء'
+            });
+
+            if (result.isConfirmed) {
+                const res = await fetch(`/students/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    Swal.fire({ icon: 'success', title: 'تم الحذف!', timer: 1500, showConfirmButton: false });
+                    fetchStudents();
+                }
+            }
+        }
+
+        fetchStudents();
+    </script>
+</body>
+</html>
